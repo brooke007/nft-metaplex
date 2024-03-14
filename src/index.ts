@@ -10,6 +10,15 @@ import {
 import * as fs from "fs"
 import { u32 } from "@coral-xyz/borsh"
 
+interface ImageInfo {
+  id: number;
+  url: string;
+  x: number;
+  y: number;
+  rotation: number;
+  scale: number;
+}
+
 interface NftData {
   name: string
   symbol: string
@@ -37,17 +46,19 @@ const nftData = {
   imageFile: "pink.png",
 }
 
+// 定义一个关键帧类型，它是ImageInfo的数组
+type Keyframe = ImageInfo[];
+
+// 定义KeyframesData为Keyframe的数组
+type KeyframesData = Keyframe[];
+
 // example data for updating an existing NFT
 let x:number,y:number,ro:number,s:number,set:number;
 // 需要将前端的数据读取到这里
 async function uploadMetadata(
   metaplex: Metaplex,
   nftData: NftData,
-  X: u32,
-  Y: u32,
-  Rotation: u32,
-  S:u32,
-  set: u32,
+  keyframesData: KeyframesData
 ): Promise<string> {
   // file to buffer
   const buffer = fs.readFileSync("src/" + nftData.imageFile)
@@ -59,39 +70,21 @@ async function uploadMetadata(
   const imageUri = await metaplex.storage().upload(file)
   console.log("image uri:", imageUri)
 
+  const attributes = keyframesData.flatMap((keyframe, keyframeIndex) => 
+    keyframe.map(imageInfo => ({
+      trait_type: `Image ${imageInfo.id} Keyframe ${keyframeIndex}`,
+      value: JSON.stringify({ x: imageInfo.x, y: imageInfo.y, rotation: imageInfo.rotation, scale: imageInfo.scale })
+    }))
+  );
+
   // upload metadata and get metadata uri (off chain metadata)
   const { uri } = await metaplex.nfts().uploadMetadata({
     name: nftData.name,
     symbol: nftData.symbol,
     description: nftData.description,
     image: imageUri,
-    properties:{
-      "creators":[
-        {
-          "address": "DrwvEExuVvrJgp1mZw6DYGYoLEeYoLYYFr3RTQv6Tn4e",
-          "share": 100
-        }
-      ]
-    },
-    attributes:[
-      {
-        "trait_type": "X-axis",
-        "value": X.toString()
-      }, {
-        "trait_type": "Y-axis",
-        "value": Y.toString()
-      },{
-        "trait_type": "Rotation",
-        "value": Rotation.toString()
-      },{
-        "trait_type": "Scaling",
-        "value": S.toString()
-      },{
-        "trait_type": "set",
-        "value": set.toString()
-      }
-    ],
-  })
+    attributes, // 使用构建的属性数组
+  });
 
   console.log("metadata uri:", uri)
   return uri
@@ -208,9 +201,27 @@ async function main() {
     collectionAuthority: user,
   }
 
+// 尝试从localStorage中获取keyframesData字符串
+const keyframesDataString = localStorage.getItem('keyframesData');
+
+// 在if语句之外定义keyframesData变量，确保它在整个作用域内都可访问
+let keyframesData: KeyframesData | undefined;
+
+// 检查是否成功获取到数据
+if (keyframesDataString) {
+    // 如果成功获取，将字符串转换为KeyframesData类型并赋值给keyframesData
+    keyframesData = JSON.parse(keyframesDataString);
+    // 现在，keyframesData包含了从localStorage加载的数据
+} else {
+    // 如果没有在localStorage找到数据，可以根据需要对keyframesData进行初始化
+    console.log("No keyframes data found in localStorage.");
+    // 例如，初始化为默认值或保留为undefined
+    keyframesData = undefined; // 或者任何合适的默认值
+}
+
   // upload data for the collection NFT and get the URI for the metadata
   //const collectionUri = await uploadMetadata(metaplex, collectionNftData, x, y, ro, s, lo, set)
-  const collectionUri = await uploadMetadata(metaplex, collectionNftData, 1, 1, 1, 1, 1)
+  const collectionUri = await uploadMetadata(metaplex, collectionNftData,keyframesData ?? [])
   // create a collection NFT using the helper function and the URI from the metadata
   const collectionNft = await createCollectionNft(
     metaplex,
@@ -220,7 +231,7 @@ async function main() {
 
   // upload the NFT data and get the URI for the metadata
   //const uri = await uploadMetadata(metaplex, nftData,  x, y, ro, s, lo, set)
-  const uri = await uploadMetadata(metaplex, nftData,  1, 1, 1, 1, 1)
+  const uri = await uploadMetadata(metaplex, nftData,  keyframesData ?? [])
   // create an NFT using the helper function and the URI from the metadata
   const nft = await createNft(
     metaplex,
