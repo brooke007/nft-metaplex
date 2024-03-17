@@ -9,6 +9,30 @@ import {
 } from "@metaplex-foundation/js"
 import * as fs from "fs"
 import { u32 } from "@coral-xyz/borsh"
+import express, { Request, Response } from 'express';
+// 导入你的 TypeScript 文件，确保你的 main 函数已经被正确导出
+
+
+const app = express();
+const port = 53378;
+
+app.use(express.json());
+
+app.post('/start-main-function', (req: Request, res: Response) => {
+  main().then(() => {
+    console.log(`he`);
+    res.json({ message: "NFT创建流程已成功启动" });
+  }).catch((error) => {
+    console.error("后端发生错误:", error);
+    res.status(500).json({ message: "执行过程中发生错误" });
+  });
+});
+
+app.listen(port, () => {
+  console.log(`服务器运行在 http://localhost:${port}`);
+});
+
+
 
 interface ImageInfo {
   id: number;
@@ -52,6 +76,19 @@ type Keyframe = ImageInfo[];
 // 定义KeyframesData为Keyframe的数组
 type KeyframesData = Keyframe[];
 
+// 新增的从文件读取KeyframesData的函数
+async function getKeyframesDataFromFile(filePath: string): Promise<KeyframesData> {
+  try {
+    const data = fs.readFileSync(filePath, { encoding: "utf-8" });
+    return JSON.parse(data);
+  } catch (error) {
+    console.error("Failed to read keyframes data from file:", error);
+    // 如果发生错误，返回一个空数组或者抛出错误
+    // 这里返回一个空数组作为失败时的安全默认值
+    return [];
+  }
+}
+
 // example data for updating an existing NFT
 let x:number,y:number,ro:number,s:number,set:number;
 // 需要将前端的数据读取到这里
@@ -61,7 +98,8 @@ async function uploadMetadata(
   keyframesData: KeyframesData
 ): Promise<string> {
   // file to buffer
-  const buffer = fs.readFileSync("src/" + nftData.imageFile)
+  //const buffer = fs.readFileSync("src/" + nftData.imageFile)
+  const buffer = fs.readFileSync(nftData.imageFile)
 
   // buffer to metaplex file
   const file = toMetaplexFile(buffer, nftData.imageFile)
@@ -171,7 +209,7 @@ async function updateNftUri(
   )
 }
 
-async function main() {
+export async function main() {
   // create a new connection to the cluster's API
   const connection = new Connection("https://devnet.helius-rpc.com/?api-key=f46e7c57-a4d4-43b0-b65b-1f287e2380cb")
 
@@ -191,7 +229,7 @@ async function main() {
       })
     )
 
-  const collectionNftData = {
+  const collectionNftData:CollectionNftData = {
     name: "TestCollectionNFT",
     symbol: "TEST",
     description: "Test Description Collection",
@@ -200,24 +238,13 @@ async function main() {
     isCollection: true,
     collectionAuthority: user,
   }
+  // 从all-keyframes.json文件读取KeyframesData
+  const keyframesDataFilePath = "../../../../all-keyframes.json"; // 根据文件实际位置调整路径
+  const keyframesData = await getKeyframesDataFromFile(keyframesDataFilePath);
 
-// 尝试从localStorage中获取keyframesData字符串
-const keyframesDataString = localStorage.getItem('keyframesData');
 
 // 在if语句之外定义keyframesData变量，确保它在整个作用域内都可访问
-let keyframesData: KeyframesData | undefined;
 
-// 检查是否成功获取到数据
-if (keyframesDataString) {
-    // 如果成功获取，将字符串转换为KeyframesData类型并赋值给keyframesData
-    keyframesData = JSON.parse(keyframesDataString);
-    // 现在，keyframesData包含了从localStorage加载的数据
-} else {
-    // 如果没有在localStorage找到数据，可以根据需要对keyframesData进行初始化
-    console.log("No keyframes data found in localStorage.");
-    // 例如，初始化为默认值或保留为undefined
-    keyframesData = undefined; // 或者任何合适的默认值
-}
 
   // upload data for the collection NFT and get the URI for the metadata
   //const collectionUri = await uploadMetadata(metaplex, collectionNftData, x, y, ro, s, lo, set)
@@ -247,12 +274,12 @@ if (keyframesDataString) {
   // await updateNftUri(metaplex, updatedUri, nft.address)
 }
 
-main()
-  .then(() => {
-    console.log("Finished successfully")
-    process.exit(0)
-  })
-  .catch((error) => {
-    console.log(error)
-    process.exit(1)
-  })
+// main()
+//   .then(() => {
+//     console.log("Finished successfully")
+//     process.exit(0)
+//   })
+//   .catch((error) => {
+//     console.log(error)
+//     process.exit(1)
+//   })
